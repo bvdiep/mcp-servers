@@ -18,6 +18,7 @@ from mcp.types import Tool, TextContent
 from config import SERPER_API_KEY, RAGFLOW_API_KEY, RAGFLOW_BASE_URL, VOYAGE_API_KEY
 from serper_adapter import SerperAdapter
 from ragflow_adapter import RagflowAdapter
+from web_scrape import get_optimized_llm_input
 
 # Import Voyage AI for reranking
 import voyageai
@@ -102,15 +103,21 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             
             output = f"**Search Results for**: {query}\n\n"
             
-            # Get top 3 results with content
+            # Download full content from top 3 results
             for i, res in enumerate(top_results[:3]):
                 title = res.get("title", "No title")
                 link = res.get("link", "")
-                snippet = res.get("snippet", "")
                 
                 output += f"### {i+1}. {title}\n"
                 output += f"🔗 {link}\n"
-                output += f"{snippet}\n\n"
+                
+                # Download and extract content using Trafilatura
+                try:
+                    content = get_optimized_llm_input(link)
+                    # Limit content length to avoid too long responses
+                    output += f"{content[:4000]}\n\n"
+                except Exception as e:
+                    output += f"(Error downloading content: {str(e)})\n\n"
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
