@@ -4,6 +4,7 @@ Based on aigf/utilities/web_scrape.py
 """
 import trafilatura
 import re
+import requests
 
 
 def clean_for_llm(text):
@@ -36,8 +37,17 @@ def get_optimized_llm_input(url):
     Quy trình tích hợp: Tải -> Trích xuất nội dung chính (Trafilatura) -> Làm sạch hậu kỳ.
     """
     try:
+        # Custom headers to avoid being blocked by websites
+        # Using a common browser user-agent
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        
         # 1. Tải nội dung thô của trang (Trafilatura sẽ sử dụng nó để phân tích)
-        downloaded = trafilatura.fetch_url(url)
+        # Use requests with custom headers since trafilatura.fetch_url doesn't support headers param
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        downloaded = response.text
         
         if not downloaded:
             return "Error: Could not download content from URL."
