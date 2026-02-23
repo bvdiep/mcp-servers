@@ -16,6 +16,7 @@ from mcp.types import Tool, TextContent
 
 # Import adapters
 from config import SERPER_API_KEY, RAGFLOW_API_KEY, RAGFLOW_BASE_URL, VOYAGE_API_KEY
+from logger import setup_server_logging
 from serper_adapter import SerperAdapter
 from ragflow_adapter import RagflowAdapter
 from web_scrape import get_optimized_llm_input
@@ -45,6 +46,8 @@ def is_excluded_url(url: str) -> bool:
             return True
     return False
 
+# Khởi tạo logger cho server này
+logger = setup_server_logging("MCP-KNOWLEDGE")
 
 # Create MCP Server
 app = Server("mcp-knowledge")
@@ -89,20 +92,30 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Handle tool calls"""
     
+    logger.info(f"Received tool call: {name}")
+    
     if name == "search_internet":
         if not SERPER_API_KEY:
+            logger.error("SERPER_API_KEY not configured")
             return [TextContent(type="text", text="Error: SERPER_API_KEY not configured")]
         
         query = arguments.get("query")
         if not query:
+            logger.warning("search_internet called without query")
             return [TextContent(type="text", text="Error: query required")]
         
+        logger.info(f"[search_internet] Query: {query}")
+        
         try:
+            # Step 1: Call Serper API
+            logger.info("[search_internet] Calling Serper API...")
             adapter = SerperAdapter(SERPER_API_KEY)
             data = adapter.search(query)
             combined_snippets, organic_results = adapter.get_organic_results(data)
+            logger.info(f"[search_internet] Got {len(organic_results) if organic_results else 0} organic results")
             
             if not organic_results:
+                logger.warning("[search_internet] No results found from Serper")
                 return [TextContent(type="text", text="No results found")]
             
             # Filter out excluded domains (YouTube, social media, etc.)
@@ -110,13 +123,18 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             
             # If all results are excluded, fall back to original results
             if not filtered_results:
+                logger.warning("[search_internet] All results filtered (excluded domains), using fallback")
                 filtered_results = organic_results
+            else:
+                logger.info(f"[search_internet] {len(filtered_results)} results after domain filtering")
             
             # Rerank results using Voyage AI
             nb_results = 5
             documents_for_rerank = [res.get('snippet', '') for res in filtered_results]
             
             try:
+                # Step 2: Call Voyage AI rerank
+                logger.info("[search_internet] Calling Voyage AI rerank...")
                 vo = voyageai.Client(api_key=VOYAGE_API_KEY)
                 reranked = vo.rerank(
                     query=query,
@@ -126,20 +144,25 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                 )
                 # Get top results based on reranked indices
                 top_results = [filtered_results[result.index] for result in reranked.results]
+                logger.info(f"[search_internet] Reranked to top {len(top_results)} results")
             except Exception as e:
-                # Fallback to original order if rerank fails
+                logger.warning(f"[search_internet] Voyage rerank failed: {e}, using fallback")
                 top_results = filtered_results[:nb_results]
             
             output = f"**Search Results for**: {query}\n\n"
             
-            # Download full content from top results (try up to 3 successful downloads)
+            # Step 3: Download full content from top results
+            logger.info("[search_internet] Starting content extraction from top results")
             successful_results = 0
-            for res in top_results:
+            for idx, res in enumerate(top_results):
                 if successful_results >= 3:
+                    logger.info("[search_internet] Reached max 3 successful content extractions")
                     break
                 
                 title = res.get("title", "No title")
                 link = res.get("link", "")
+                
+                logger.info(f"[search_internet] Scraping result {idx+1}: {title} ({link})")
                 
                 output += f"### {successful_results+1}. {title}\n"
                 output += f"🔗 {link}\n"
@@ -152,32 +175,38 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                         # Limit content length to avoid too long responses
                         output += f"{content[:4000]}\n\n"
                         successful_results += 1
+                        logger.info(f"[search_internet] Successfully extracted content from: {title}")
                     else:
-                        txt = ""
-                        # if content:
-                        #     txt += content[:50]
-                        # else:
-                        #     txt += "No content"
-                        output += f"(Could not extract content from this URL >>>>>>>>>>> {txt})\n\n"
+                        output += f"(Could not extract content from this URL)\n\n"
+                        logger.warning(f"[search_internet] Failed to extract content from: {link}")
                 except Exception as e:
                     output += f"(Error downloading content: {str(e)})\n\n"
+                    logger.error(f"[search_internet] Exception while scraping {link}: {e}")
             
             if successful_results == 0:
                 output += "Could not extract content from any of the search results.\n"
+                logger.warning("[search_internet] No content extracted from any result")
+            else:
+                logger.info(f"[search_internet] Completed: {successful_results}/{len(top_results)} contents extracted")
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
+            logger.error(f"[search_internet] Unexpected error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "ragflow_query":
         if not RAGFLOW_API_KEY or not RAGFLOW_BASE_URL:
+            logger.error("RAGFLOW_API_KEY or RAGFLOW_BASE_URL not configured")
             return [TextContent(type="text", text="Error: RAGFLOW_API_KEY and RAGFLOW_BASE_URL not configured")]
         
         query = arguments.get("query")
         knowledge = arguments.get("knowledge", "lily")
         
         if not query:
+            logger.warning("ragflow_query called without query")
             return [TextContent(type="text", text="Error: query required")]
+        
+        logger.info(f"[ragflow_query] Query: {query}, Knowledge: {knowledge}")
         
         # Map knowledge type to task type
         task_map = {
@@ -189,13 +218,19 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         }
         
         task_type = task_map.get(knowledge, "knowleadge_lily")
+        logger.info(f"[ragflow_query] Mapped to task_type: {task_type}")
         
         try:
+            logger.info(f"[ragflow_query] Calling Ragflow API with task: {task_type}")
             adapter = RagflowAdapter(RAGFLOW_API_KEY, RAGFLOW_BASE_URL)
             result = await adapter.query(query, task_type)
             
-            output = result.get("answer", "No answer")
+            answer = result.get("answer", "No answer")
             references = result.get("references", [])
+            
+            logger.info(f"[ragflow_query] Got response with {len(references)} references")
+            
+            output = answer
             
             if references:
                 output += "\n\n**References:**\n"
@@ -204,8 +239,10 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
+            logger.error(f"[ragflow_query] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
+    logger.warning(f"Unknown tool called: {name}")
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
