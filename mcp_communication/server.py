@@ -14,7 +14,6 @@ from typing import Any, List
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
-from mcp.server.gradient import Gradient
 
 # Import adapters
 from config import (
@@ -141,10 +140,7 @@ async def main():
         await app.run(
             read_stream,
             write_stream,
-            app.create_initialization_options(
-                instructions="MCP Communication Server - Email and Weather",
-                gradient=Gradient("#3B82F6", "#1D4ED8")
-            )
+            app.create_initialization_options()
         )
 
 

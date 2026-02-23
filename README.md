@@ -55,8 +55,8 @@ export BI_API_KEY="your_metabase_api_key"
 export BI_BASE_URL="https://your-metabase.com"
 
 # OpenProject (mcp_productivity)
-export OPENPROJECT_API_KEY="your_api_key"
-export OPENPROJECT_BASE_URL="https://project.bsmlabs.ai"
+export OP_API_KEY="your_api_key"
+export OP_BASE_URL="https://project.bsmlabs.ai"
 ```
 
 ### Running a Server

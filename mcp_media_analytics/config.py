@@ -3,6 +3,9 @@ Configuration for MCP Media & Analytics Server
 Uses environment variables for configuration
 """
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Immich Configuration
 IMMICH_URL = os.getenv("IMMICH_URL", "https://photo.bsmlabs.ai")

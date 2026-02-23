@@ -3,11 +3,14 @@ Configuration for MCP Productivity Server
 Uses environment variables for configuration
 """
 import os
+from dotenv import load_dotenv
 from typing import Dict, Any, List, Optional
 
+load_dotenv()
+
 # OpenProject Configuration
-OP_API_KEY = os.getenv("OPENPROJECT_API_KEY", "")
-OP_BASE_URL = os.getenv("OPENPROJECT_BASE_URL", "https://project.bsmlabs.ai")
+OP_API_KEY = os.getenv("OP_API_KEY", "")
+OP_BASE_URL = os.getenv("OP_BASE_URL", "https://project.bsmlabs.ai")
 
 # Database Configuration (SQLite for local storage)
 DATABASE_URL = os.getenv("DATABASE_URL", "schedules.db")

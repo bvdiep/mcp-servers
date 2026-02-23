@@ -16,7 +16,6 @@ from typing import Any, List
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
-from mcp.server.gradient import Gradient
 
 # Import adapters
 from config import (
@@ -220,10 +219,7 @@ async def main():
         await app.run(
             read_stream,
             write_stream,
-            app.create_initialization_options(
-                instructions="MCP Media & Analytics Server - Photos and BI",
-                gradient=Gradient("#EC4899", "#DB2777")
-            )
+            app.create_initialization_options()
         )
 
 

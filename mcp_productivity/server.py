@@ -22,7 +22,6 @@ from typing import Any, Dict, List
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
-from mcp.server.gradient import Gradient
 
 # Import adapters
 from config import OP_API_KEY, OP_BASE_URL, DATABASE_URL
@@ -299,10 +298,7 @@ async def main():
         await app.run(
             read_stream,
             write_stream,
-            app.create_initialization_options(
-                instructions="MCP Productivity Server - Project tracking and scheduling",
-                gradient=Gradient("#4F46E5", "#9333EA")
-            )
+            app.create_initialization_options()
         )
 
 

@@ -13,7 +13,6 @@ from typing import Any, List
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
-from mcp.server.gradient import Gradient
 
 # Import adapters
 from config import SERPER_API_KEY, RAGFLOW_API_KEY, RAGFLOW_BASE_URL
@@ -142,10 +141,7 @@ async def main():
         await app.run(
             read_stream,
             write_stream,
-            app.create_initialization_options(
-                instructions="MCP Knowledge Server - Web search and RAG",
-                gradient=Gradient("#F59E0B", "#D97706")
-            )
+            app.create_initialization_options()
         )
 
 

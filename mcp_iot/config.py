@@ -3,6 +3,9 @@ Configuration for MCP IoT Server
 Uses environment variables for configuration
 """
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ThingsBoard Configuration
 THINGSBOARD_URL = os.getenv("THINGSBOARD_URL", "https://thingsboard.bsmlabs.ai")

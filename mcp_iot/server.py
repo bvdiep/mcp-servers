@@ -14,7 +14,6 @@ from typing import Any, Dict, List
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
-from mcp.server.gradient import Gradient
 
 # Import adapters
 from config import THINGSBOARD_URL, OFFICE_TB_USERNAME, OFFICE_TB_PASSWORD
@@ -190,10 +189,7 @@ async def main():
         await app.run(
             read_stream,
             write_stream,
-            app.create_initialization_options(
-                instructions="MCP IoT Server - ThingsBoard device control",
-                gradient=Gradient("#10B981", "#059669")
-            )
+            app.create_initialization_options()
         )
 
 

@@ -3,6 +3,9 @@ Configuration for MCP Communication Server
 Uses environment variables for configuration
 """
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Email Configuration
 EMAIL_IMAP_SERVER = os.getenv("EMAIL_IMAP_SERVER", "imap.zoho.com")
