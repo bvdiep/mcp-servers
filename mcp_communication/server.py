@@ -22,10 +22,14 @@ from config import (
 )
 from email_adapter import read_emails as fetch_emails
 from weather_adapter import get_weather_forecast, get_current_time
+from logger import setup_server_logging
 
 
 # Create MCP Server
 app = Server("mcp-communication")
+
+# Khởi tạo logger cho server này
+logger = setup_server_logging("MCP-COMMUNICATION")
 
 
 @app.list_tools()
@@ -92,11 +96,15 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Handle tool calls"""
     
+    logger.info(f"Received tool call: {name}")
+    
     if name == "read_emails":
         if not EMAIL_USERNAME or not EMAIL_APP_PASSWORD:
+            logger.error("Email not configured")
             return [TextContent(type="text", text="Error: Email not configured")]
         
         n_hours = arguments.get("n_hours", 12)
+        logger.info(f"[read_emails] Reading emails from last {n_hours} hours")
         
         try:
             result = await fetch_emails(
@@ -105,32 +113,42 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                 EMAIL_APP_PASSWORD,
                 n_hours
             )
+            logger.info("[read_emails] Email fetch completed")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[read_emails] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "get_weather_forecast":
         if not OPENWEATHER_API_KEY:
+            logger.error("OPENWEATHER_API_KEY not configured")
             return [TextContent(type="text", text="Error: OPENWEATHER_API_KEY not configured")]
         
         city = arguments.get("city", "Hanoi")
         days = arguments.get("days", 5)
+        logger.info(f"[get_weather_forecast] City: {city}, Days: {days}")
         
         try:
             result = await get_weather_forecast(OPENWEATHER_API_KEY, city, days)
+            logger.info("[get_weather_forecast] Weather fetch completed")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[get_weather_forecast] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "get_current_time":
         city = arguments.get("city", "Hanoi")
+        logger.info(f"[get_current_time] City: {city}")
         
         try:
             result = get_current_time(city)
+            logger.info("[get_current_time] Time fetch completed")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[get_current_time] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
+    logger.warning(f"Unknown tool called: {name}")
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 

@@ -30,7 +30,7 @@ async def test_single_server(server_script_path):
             print(f"Đang chạy thử tool: {first_tool_name}...")
             
             # Thay đổi 'arguments' theo schema của tool bạn
-            result = await session.call_tool(first_tool_name, arguments={"query": "Lịch sử Hà Nội"}) 
+            result = await session.call_tool(first_tool_name, arguments={"query": "Sử đá lưu danh"}) 
             print(f"Kết quả trả về: {result.content}")
 
 if __name__ == "__main__":

@@ -27,10 +27,14 @@ from mcp.types import Tool, TextContent
 from config import OP_API_KEY, OP_BASE_URL, DATABASE_URL
 from openproject_adapter import OpenProjectStats
 from schedule_adapter import ScheduleAdapter, get_schedules_by_week
+from logger import setup_server_logging
 
 
 # Create MCP Server
 app = Server("mcp-productivity")
+
+# Khởi tạo logger cho server này
+logger = setup_server_logging("MCP-PRODUCTIVITY")
 
 # Initialize adapters
 schedule_manager = ScheduleAdapter(DATABASE_URL if DATABASE_URL else "schedules.db")
@@ -144,28 +148,38 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Handle tool calls"""
     
+    logger.info(f"Received tool call: {name}")
+    
     # OpenProject Tools
     if name == "get_all_projects_overview":
         if not OP_API_KEY or not OP_BASE_URL:
+            logger.error("OP_API_KEY or OP_BASE_URL not configured")
             return [TextContent(type="text", text="Error: OP_API_KEY and OP_BASE_URL not configured")]
         
         # This would normally use project mapping from config
         # For now, return placeholder
+        logger.warning("[get_all_projects_overview] Project mapping not configured")
         return [TextContent(type="text", text="Error: Project mapping not configured. Set PROJECT_MAPPING_JSON")]
     
     elif name == "get_sprint_overview":
         if not OP_API_KEY or not OP_BASE_URL:
+            logger.error("OP_API_KEY or OP_BASE_URL not configured")
             return [TextContent(type="text", text="Error: OP_API_KEY and OP_BASE_URL not configured")]
         
         project_id = arguments.get("project_id")
         sprint_id = arguments.get("sprint_id")
         
         if not project_id or not sprint_id:
+            logger.warning("[get_sprint_overview] Missing project_id or sprint_id")
             return [TextContent(type="text", text="Error: project_id and sprint_id required")]
+        
+        logger.info(f"[get_sprint_overview] Project: {project_id}, Sprint: {sprint_id}")
         
         try:
             openproject = OpenProjectStats(OP_API_KEY, OP_BASE_URL, project_id)
             status_counts, summarize, _, _ = openproject.fetch_ticket_status_counts_by_version(sprint_id)
+            
+            logger.info(f"[get_sprint_overview] Fetched {len(status_counts)} status counts")
             
             output = "## Status Counts\n"
             for status, count in status_counts.items():
@@ -179,10 +193,13 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
+            logger.error(f"[get_sprint_overview] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     # Schedule Tools
     elif name == "add_schedule":
+        logger.info(f"[add_schedule] Adding new schedule: {arguments.get('title')}")
+        
         try:
             schedule_id, msg = schedule_manager.add_schedule({
                 'title': arguments.get("title"),
@@ -194,19 +211,26 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                 'type': arguments.get("type", "meeting")
             })
             if schedule_id:
+                logger.info(f"[add_schedule] Created schedule with ID: {schedule_id}")
                 return [TextContent(type="text", text=f"Created schedule with ID: {schedule_id}")]
+            logger.warning(f"[add_schedule] Failed: {msg}")
             return [TextContent(type="text", text=f"Error: {msg}")]
         except Exception as e:
+            logger.error(f"[add_schedule] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "get_schedules_one_day":
+        date_str = arguments.get("date_str")
+        logger.info(f"[get_schedules_one_day] Date: {date_str}")
+        
         try:
-            date_str = arguments.get("date_str")
             schedules = schedule_manager.get_schedules_by_date(date_str)
             
             if not schedules:
+                logger.info(f"[get_schedules_one_day] No schedules on {date_str}")
                 return [TextContent(type="text", text=f"No schedules on {date_str}")]
             
+            logger.info(f"[get_schedules_one_day] Found {len(schedules)} schedules")
             output = f"📅 Schedules for {date_str}\n\n"
             for s in schedules:
                 output += f"- {s['start_time']} - {s['title']}\n"
@@ -215,9 +239,12 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
+            logger.error(f"[get_schedules_one_day] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "get_schedules_this_week":
+        logger.info("[get_schedules_this_week] Fetching schedules for this week")
+        
         try:
             today = datetime.now()
             from datetime import timedelta
@@ -232,37 +259,47 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             )
             
             if not schedules:
+                logger.info("[get_schedules_this_week] No schedules this week")
                 return [TextContent(type="text", text="No schedules this week")]
             
+            logger.info(f"[get_schedules_this_week] Found {len(schedules)} schedules")
             output = f"📅 This Week ({len(schedules)} schedules)\n\n"
             for s in schedules:
                 output += f"- {s['start_time']} - {s['title']}\n"
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
+            logger.error(f"[get_schedules_this_week] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "search_schedules":
+        query = arguments.get("query", "")
+        top_k = arguments.get("top_k", 5)
+        
+        logger.info(f"[search_schedules] Query: {query}, Top K: {top_k}")
+        
         try:
-            query = arguments.get("query", "")
-            top_k = arguments.get("top_k", 5)
-            
             results = schedule_manager.search_schedules(query, top_k)
             
             if not results:
+                logger.info(f"[search_schedules] No schedules found for query: {query}")
                 return [TextContent(type="text", text="No schedules found")]
             
+            logger.info(f"[search_schedules] Found {len(results)} schedules")
             output = f"🔍 Found {len(results)} schedules\n\n"
             for s in results:
                 output += f"- {s['start_time']} - {s['title']}\n"
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
+            logger.error(f"[search_schedules] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "update_schedule":
+        schedule_id = arguments.get("schedule_id")
+        logger.info(f"[update_schedule] Updating schedule ID: {schedule_id}")
+        
         try:
-            schedule_id = arguments.get("schedule_id")
             updates = {}
             
             if arguments.get("new_title"):
@@ -277,18 +314,25 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                 updates["location"] = arguments["new_location"]
             
             schedule_manager.update_schedule(schedule_id, updates)
+            logger.info(f"[update_schedule] Successfully updated schedule {schedule_id}")
             return [TextContent(type="text", text=f"Updated schedule {schedule_id}")]
         except Exception as e:
+            logger.error(f"[update_schedule] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "delete_schedule":
+        schedule_id = arguments.get("schedule_id")
+        logger.info(f"[delete_schedule] Deleting schedule ID: {schedule_id}")
+        
         try:
-            schedule_id = arguments.get("schedule_id")
             schedule_manager.delete_schedule(schedule_id)
+            logger.info(f"[delete_schedule] Successfully deleted schedule {schedule_id}")
             return [TextContent(type="text", text=f"Deleted schedule {schedule_id}")]
         except Exception as e:
+            logger.error(f"[delete_schedule] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
+    logger.warning(f"Unknown tool called: {name}")
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 

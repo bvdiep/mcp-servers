@@ -24,10 +24,14 @@ from config import (
 )
 from immich_adapter import query_photo, get_random_photo
 from metabase_adapter import check_attendance, get_ai_review_data, query_telemetry_metabase
+from logger import setup_server_logging
 
 
 # Create MCP Server
 app = Server("mcp-media-analytics")
+
+# Khởi tạo logger cho server này
+logger = setup_server_logging("MCP-MEDIA-ANALYTICS")
 
 
 @app.list_tools()
@@ -123,8 +127,11 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Handle tool calls"""
     
+    logger.info(f"Received tool call: {name}")
+    
     if name == "query_photo":
         if not IMMICH_USERNAME or not IMMICH_PASSWORD:
+            logger.error("Immich not configured")
             return [TextContent(type="text", text="Error: Immich not configured")]
         
         query = arguments.get("query", "")
@@ -132,46 +139,61 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         persons = arguments.get("persons", [])
         amount = arguments.get("amount", 1)
         
+        logger.info(f"[query_photo] Query: {query}, Vision: {vision_query}, Persons: {persons}, Amount: {amount}")
+        
         try:
             result = await query_photo(
                 IMMICH_URL, IMMICH_USERNAME, IMMICH_PASSWORD,
                 query, vision_query, persons, amount, IMMICH_ALBUM_ID
             )
+            logger.info("[query_photo] Photo query completed")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[query_photo] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "get_random_photo":
         if not IMMICH_USERNAME or not IMMICH_PASSWORD:
+            logger.error("Immich not configured")
             return [TextContent(type="text", text="Error: Immich not configured")]
+        
+        logger.info("[get_random_photo] Fetching random photo")
         
         try:
             result = await get_random_photo(
                 IMMICH_URL, IMMICH_USERNAME, IMMICH_PASSWORD,
                 IMMICH_ALBUM_ID
             )
+            logger.info("[get_random_photo] Random photo fetched")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[get_random_photo] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "check_attendance":
         if not BI_API_KEY or not BI_BASE_URL:
+            logger.error("BI not configured")
             return [TextContent(type="text", text="Error: BI not configured")]
         
         date = arguments.get("date")
         team = arguments.get("team")
+        
+        logger.info(f"[check_attendance] Date: {date}, Team: {team}")
         
         try:
             result = await check_attendance(
                 BI_API_KEY, BI_BASE_URL, BSMLABS_MYSQL_ID,
                 date, team
             )
+            logger.info("[check_attendance] Attendance check completed")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[check_attendance] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "get_ai_review_data":
         if not BI_API_KEY or not BI_BASE_URL:
+            logger.error("BI not configured")
             return [TextContent(type="text", text="Error: BI not configured")]
         
         project = arguments.get("project")
@@ -180,17 +202,22 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         end_time = arguments.get("end_time")
         limit = arguments.get("limit", 60)
         
+        logger.info(f"[get_ai_review_data] Project: {project}, Member: {member}, Limit: {limit}")
+        
         try:
             result = await get_ai_review_data(
                 BI_API_KEY, BI_BASE_URL, CODE_REVIEW_DB_ID,
                 project, member, start_time, end_time, limit
             )
+            logger.info("[get_ai_review_data] AI review data fetched")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[get_ai_review_data] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "query_telemetry_metabase":
         if not BI_API_KEY or not BI_BASE_URL:
+            logger.error("BI not configured")
             return [TextContent(type="text", text="Error: BI not configured")]
         
         device_id = arguments.get("device_id")
@@ -199,17 +226,23 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         end_date = arguments.get("end_date")
         
         if not device_id or not telemetry_keys:
+            logger.warning("[query_telemetry_metabase] Missing device_id or telemetry_keys")
             return [TextContent(type="text", text="Error: device_id and telemetry_keys required")]
+        
+        logger.info(f"[query_telemetry_metabase] Device: {device_id}, Keys: {telemetry_keys}")
         
         try:
             result = await query_telemetry_metabase(
                 BI_API_KEY, BI_BASE_URL, BSMLABS_POSTGRES_ID,
                 device_id, telemetry_keys, start_date, end_date
             )
+            logger.info("[query_telemetry_metabase] Telemetry query completed")
             return [TextContent(type="text", text=result.get("text", ""))]
         except Exception as e:
+            logger.error(f"[query_telemetry_metabase] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
+    logger.warning(f"Unknown tool called: {name}")
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 

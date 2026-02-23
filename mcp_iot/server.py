@@ -18,10 +18,14 @@ from mcp.types import Tool, TextContent
 # Import adapters
 from config import THINGSBOARD_URL, OFFICE_TB_USERNAME, OFFICE_TB_PASSWORD
 from thingsboard_adapter import ThingsBoardAPIClient
+from logger import setup_server_logging
 
 
 # Create MCP Server
 app = Server("mcp-iot")
+
+# Khởi tạo logger cho server này
+logger = setup_server_logging("MCP-IOT")
 
 
 @app.list_tools()
@@ -86,8 +90,11 @@ async def list_tools() -> List[Tool]:
 async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     """Handle tool calls"""
     
+    logger.info(f"Received tool call: {name}")
+    
     if name == "set_attributes_light":
         if not THINGSBOARD_URL or not OFFICE_TB_USERNAME:
+            logger.error("ThingsBoard not configured")
             return [TextContent(type="text", text="Error: ThingsBoard not configured")]
         
         device_name = arguments.get("device_name")
@@ -104,7 +111,10 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         
         device_id = devices.get(device_name)
         if not device_id:
+            logger.warning(f"[set_attributes_light] Unknown device: {device_name}")
             return [TextContent(type="text", text=f"Unknown device: {device_name}")]
+        
+        logger.info(f"[set_attributes_light] Setting {device_name}: White {value_white}%, Yellow {value_yellow}%")
         
         try:
             # Calculate PWM (0-1023)
@@ -121,12 +131,15 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             await tb.set_shared_attribute(device_id, data)
             await tb.close()
             
+            logger.info(f"[set_attributes_light] Successfully set attributes for {device_name}")
             return [TextContent(type="text", text=f"Set {device_name}: White {value_white}%, Yellow {value_yellow}%")]
         except Exception as e:
+            logger.error(f"[set_attributes_light] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
     elif name == "send_chart_telemetry":
         if not THINGSBOARD_URL or not OFFICE_TB_USERNAME:
+            logger.error("ThingsBoard not configured")
             return [TextContent(type="text", text="Error: ThingsBoard not configured")]
         
         device_id = arguments.get("device_id")
@@ -137,7 +150,10 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
         unit = arguments.get("unit")
         
         if not device_id or not telemetry_keys:
+            logger.warning("[send_chart_telemetry] Missing device_id or telemetryKeys")
             return [TextContent(type="text", text="Error: device_id and telemetryKeys required")]
+        
+        logger.info(f"[send_chart_telemetry] Fetching telemetry for device {device_id}, keys: {telemetry_keys}")
         
         try:
             tb = await ThingsBoardAPIClient(THINGSBOARD_URL, OFFICE_TB_USERNAME, OFFICE_TB_PASSWORD).init()
@@ -170,16 +186,20 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             await tb.close()
             
             if data_df is None or data_df.empty:
+                logger.warning("[send_chart_telemetry] No data in selected time range")
                 return [TextContent(type="text", text="No data in selected time range")]
             
+            logger.info("[send_chart_telemetry] Telemetry fetch completed")
             output = f"📊 Telemetry Data\n"
             output += f"Time range: {start_time} to {end_time}\n\n"
             output += txt_for_llm or short_txt
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
+            logger.error(f"[send_chart_telemetry] Error: {e}", exc_info=True)
             return [TextContent(type="text", text=f"Error: {str(e)}")]
     
+    logger.warning(f"Unknown tool called: {name}")
     return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
