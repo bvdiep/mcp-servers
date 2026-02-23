@@ -103,21 +103,38 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             
             output = f"**Search Results for**: {query}\n\n"
             
-            # Download full content from top 3 results
-            for i, res in enumerate(top_results[:3]):
+            # Download full content from top results (try up to 3 successful downloads)
+            successful_results = 0
+            for res in top_results:
+                if successful_results >= 3:
+                    break
+                
                 title = res.get("title", "No title")
                 link = res.get("link", "")
                 
-                output += f"### {i+1}. {title}\n"
+                output += f"### {successful_results+1}. {title}\n"
                 output += f"🔗 {link}\n"
                 
                 # Download and extract content using Trafilatura
                 try:
                     content = get_optimized_llm_input(link)
-                    # Limit content length to avoid too long responses
-                    output += f"{content[:4000]}\n\n"
+                    # Check if content was successfully downloaded
+                    if content and not content.startswith("Error:") and not content.startswith("Could not"):
+                        # Limit content length to avoid too long responses
+                        output += f"{content[:4000]}\n\n"
+                        successful_results += 1
+                    else:
+                        txt = ""
+                        # if content:
+                        #     txt += content[:50]
+                        # else:
+                        #     txt += "No content"
+                        output += f"(Could not extract content from this URL >>>>>>>>>>> {txt})\n\n"
                 except Exception as e:
                     output += f"(Error downloading content: {str(e)})\n\n"
+            
+            if successful_results == 0:
+                output += "Could not extract content from any of the search results.\n"
             
             return [TextContent(type="text", text=output)]
         except Exception as e:
