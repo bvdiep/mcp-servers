@@ -24,6 +24,28 @@ from web_scrape import get_optimized_llm_input
 import voyageai
 
 
+# Domains to exclude from scraping (these sites don't return useful content)
+EXCLUDED_DOMAINS = [
+    'youtube.com', 'youtu.be', 'youtube-nocookie.com',
+    'vimeo.com', 'dailymotion.com',
+    'tiktok.com', 'instagram.com', 
+    'facebook.com', 'fb.watch',
+    'twitter.com', 'x.com',
+    'linkedin.com', 'linkedin.ai',
+    'reddit.com', 'redd.it',
+    'pinterest.com', 'pin.it',
+]
+
+
+def is_excluded_url(url: str) -> bool:
+    """Check if URL belongs to an excluded domain"""
+    url_lower = url.lower()
+    for domain in EXCLUDED_DOMAINS:
+        if domain in url_lower:
+            return True
+    return False
+
+
 # Create MCP Server
 app = Server("mcp-knowledge")
 
@@ -83,9 +105,16 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             if not organic_results:
                 return [TextContent(type="text", text="No results found")]
             
+            # Filter out excluded domains (YouTube, social media, etc.)
+            filtered_results = [res for res in organic_results if not is_excluded_url(res.get('link', ''))]
+            
+            # If all results are excluded, fall back to original results
+            if not filtered_results:
+                filtered_results = organic_results
+            
             # Rerank results using Voyage AI
             nb_results = 5
-            documents_for_rerank = [res.get('snippet', '') for res in organic_results]
+            documents_for_rerank = [res.get('snippet', '') for res in filtered_results]
             
             try:
                 vo = voyageai.Client(api_key=VOYAGE_API_KEY)
@@ -96,10 +125,10 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
                     top_k=nb_results
                 )
                 # Get top results based on reranked indices
-                top_results = [organic_results[result.index] for result in reranked.results]
+                top_results = [filtered_results[result.index] for result in reranked.results]
             except Exception as e:
                 # Fallback to original order if rerank fails
-                top_results = organic_results[:nb_results]
+                top_results = filtered_results[:nb_results]
             
             output = f"**Search Results for**: {query}\n\n"
             
