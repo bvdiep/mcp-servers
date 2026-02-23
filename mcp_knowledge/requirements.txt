@@ -5,6 +5,9 @@ requests>=2.31.0
 # Ragflow API
 aiohttp>=3.9.0
 
+# Voyage AI (for reranking)
+voyageai>=0.2.0
+
 # MCP Server
 mcp>=1.0.0
 fastapi>=0.109.0

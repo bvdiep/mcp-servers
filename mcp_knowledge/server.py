@@ -3,7 +3,7 @@ MCP Knowledge Server
 Manages knowledge search (Serper + Ragflow)
 
 Tools:
-- search_internet: Search the web for information
+- search_internet: Search the web for information (with Voyage rerank)
 - ragflow_query: Query knowledge base
 """
 import asyncio
@@ -15,9 +15,12 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 # Import adapters
-from config import SERPER_API_KEY, RAGFLOW_API_KEY, RAGFLOW_BASE_URL
+from config import SERPER_API_KEY, RAGFLOW_API_KEY, RAGFLOW_BASE_URL, VOYAGE_API_KEY
 from serper_adapter import SerperAdapter
 from ragflow_adapter import RagflowAdapter
+
+# Import Voyage AI for reranking
+import voyageai
 
 
 # Create MCP Server
@@ -79,10 +82,28 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
             if not organic_results:
                 return [TextContent(type="text", text="No results found")]
             
+            # Rerank results using Voyage AI
+            nb_results = 5
+            documents_for_rerank = [res.get('snippet', '') for res in organic_results]
+            
+            try:
+                vo = voyageai.Client(api_key=VOYAGE_API_KEY)
+                reranked = vo.rerank(
+                    query=query,
+                    documents=documents_for_rerank,
+                    model="rerank-2.5",
+                    top_k=nb_results
+                )
+                # Get top results based on reranked indices
+                top_results = [organic_results[result.index] for result in reranked.results]
+            except Exception as e:
+                # Fallback to original order if rerank fails
+                top_results = organic_results[:nb_results]
+            
             output = f"**Search Results for**: {query}\n\n"
             
             # Get top 3 results with content
-            for i, res in enumerate(organic_results[:3]):
+            for i, res in enumerate(top_results[:3]):
                 title = res.get("title", "No title")
                 link = res.get("link", "")
                 snippet = res.get("snippet", "")
