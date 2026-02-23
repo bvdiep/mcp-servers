@@ -1,0 +1,17 @@
+# MCP Media & Analytics Server Dependencies
+# Immich
+requests>=2.31.0
+
+# Metabase
+sqlalchemy>=2.0.0
+
+# MCP Server
+mcp>=1.0.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+
+# Utilities
+pydantic>=2.5.0
+python-dateutil>=2.8.2
+pandas>=2.0.0
+matplotlib>=3.7.0

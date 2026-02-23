@@ -1,0 +1,16 @@
+# MCP Knowledge Server Dependencies
+# Serper API
+requests>=2.31.0
+
+# Ragflow API
+aiohttp>=3.9.0
+
+# MCP Server
+mcp>=1.0.0
+fastapi>=0.109.0
+uvicorn>=0.27.0
+
+# Utilities
+pydantic>=2.5.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
