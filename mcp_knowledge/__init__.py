@@ -1,4 +1,4 @@
 # MCP Knowledge Server
-# This module contains tools for internet search and knowledge retrieval
+# This module provides knowledge retrieval using Ragflow RAG
 
 __version__ = "1.0.0"

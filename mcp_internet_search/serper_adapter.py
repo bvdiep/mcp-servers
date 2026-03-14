@@ -1,5 +1,5 @@
 """
-Serper Adapter - Standalone version for MCP Knowledge Server
+Serper Adapter - Standalone version for MCP Internet Search Server
 """
 import requests
 import logging

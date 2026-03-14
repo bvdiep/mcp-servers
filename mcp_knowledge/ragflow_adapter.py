@@ -4,7 +4,10 @@ Ragflow Adapter - Standalone version for MCP Knowledge Server
 import aiohttp
 import json
 import logging
+import os
 from typing import Dict, Any, List
+
+from config import RAGFLOW_SIMILARITY_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -34,50 +37,65 @@ class RagflowAdapter:
     
     async def query(self, query: str, knowledge_base: str = "lily") -> Dict[str, Any]:
         """Query the knowledge base"""
+        # Auto-initialize session if not already done
+        if not self.session:
+            await self.init()
         # Map knowledge base names to Ragflow IDs
+        # Note: lily and ruatrangnguyen currently use the same dataset ID (aliases)
         knowledge_map = {
-            "lily": "lily-id",
-            "ruatrangnguyen": "ruatrangnguyen-id",
+            "lily": "5370af40ed0311f0b9726abec7375c26",
+            "ruatrangnguyen": "5370af40ed0311f0b9726abec7375c26",  # Same as lily for now
             "yte": "healthcare-id",
             "company": "company-id",
             "private": "private-id"
         }
         
-        dataset_id = knowledge_map.get(knowledge_base, "lily-id")
+        default_id = knowledge_map.get("lily", "5370af40ed0311f0b9726abec7375c26")
+        dataset_id = knowledge_map.get(knowledge_base, default_id)
         
-        # Chat completion endpoint
-        url = f"{self.base_url}/chat/completions"
+        url = f"{self.base_url}/api/v1/retrieval"
+        top_k = 5
+        
+        # Get configurable similarity threshold (default 0.2 for better quality)
+        similarity_threshold = RAGFLOW_SIMILARITY_THRESHOLD
         
         payload = {
-            "model": "ragflow",
-            "messages": [
-                {"role": "user", "content": query}
-            ],
-            "dataset_id": dataset_id,
-            "stream": False
+            "question": query,
+            "top_k": 256, # số lượng chunks đưa vào rerank
+            "page": 1,
+            "page_size": top_k,
+            "rerank_id": "rerank-2@Voyage AI",
+            "vector_similarity_weight": 0.4, # trọng số khi kết hợp semantic và keyword search
+            "similarity_threshold": similarity_threshold,
+            "use_kg": False,
+            "dataset_ids": [dataset_id]
         }
-        
+                
         try:
-            async with self.session.post(url, json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return {
-                        "text": data.get("choices", [{}])[0].get("message", {}).get("content", ""),
-                        "references": data.get("references", [])
-                    }
-                else:
-                    error = await response.text()
-                    logger.error(f"Ragflow query failed: {error}")
-                    return {
-                        "text": f"Lỗi: {response.status}",
-                        "references": []
-                    }
+            response = await self.session.post(url, json=payload)
+            response.raise_for_status() # Kiểm tra lỗi 4xx, 5xx từ HTTP
+            result = await response.json()
         except Exception as e:
-            logger.error(f"Ragflow error: {e}")
+            logger.error(f"Lỗi kết nối hoặc parse JSON: {e}")
             return {
-                "text": f"Lỗi: {str(e)}",
+                "text": "Lỗi kết nối hoặc parse JSON",
                 "references": []
             }
+        
+        output_txt = ""
+        if result.get("code") == 0:
+            raw_chunks = result.get("data", {}).get("chunks", [])
+            
+            # Chuyển đổi sang cấu trúc bạn mong muốn
+            for c in raw_chunks:
+                output_txt += f"Nguồn: {c.get('document_keyword')}\n{c.get('content')}\n\n"
+        else:
+            logger.error(f"Lỗi API: {result.get('message')}")
+            output_txt += "Lỗi khi truy vấn dữ liệu"
+        return {
+            "text": output_txt,
+            "references": []
+        }
 
 
 async def query_knowledge(

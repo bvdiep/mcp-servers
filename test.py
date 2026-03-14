@@ -35,5 +35,5 @@ async def test_single_server(server_script_path):
 
 if __name__ == "__main__":
     # Thay đường dẫn tới file main.py của server bạn muốn test
-    target_server = "./mcp_knowledge/server.py"
+    target_server = "./mcp_internet_search/server.py"
     asyncio.run(test_single_server(target_server))
